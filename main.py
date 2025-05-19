@@ -26,8 +26,7 @@ def main(page: ft.Page):
     trancard = ft.Text("Т-банк")
     trancat = ft.Text("Прочее")
 
-    def get_info():
-        pass
+    #Обработка транзакций
 
     def inform():
         db = sqlite3.connect("UserData.db", check_same_thread=False)
@@ -67,13 +66,13 @@ def main(page: ft.Page):
             ft.DropdownOption(key="Наличка"),
             ft.DropdownOption(key="Т-банк"),
             ft.DropdownOption(key="Каспи"),
-            ft.DropdownOption(key="Сбербанк"),
+            ft.DropdownOption(key="СберБанк"),
             ft.DropdownOption(key="BuyBit"),
             ft.DropdownOption(key="OKX"),
             ft.DropdownOption(key="Binance"),
         ], label = "wallet", 
         value = "Т-банк",
-        on_change=dropdown_card,
+        on_change = dropdown_card,
         )
     
     def option_currency():
@@ -106,8 +105,13 @@ def main(page: ft.Page):
     on_change = option_category,
     )
 
-    def dropdown_currency(e):
-        pass
+    def transaction_in(e):
+        db = sqlite3.connect("UserData.db", check_same_thread=False)
+        c = db.cursor()
+        c.execute("INSERT INTO transactions (date, account, category, amount) VALUES (?, ?, ?, ?)", (today, trancard.value, trancat.value, tranval.value))
+        c.execute("UPDATE accounts SET balance = balance + ? WHERE name = ?", (tranval.value, trancard.value))
+        db.commit()
+        db.close()
 
     def route_change(route):
         page.views.clear()
@@ -164,10 +168,11 @@ def main(page: ft.Page):
                     [
                         homepage,
                         card_list,
-                        trancard,
                         category_list,
-                        trancat,
                         tranval,
+                        ft.ElevatedButton(text="Шпак", on_click=transaction_in),
+                        trancard,
+                        trancat,
                     ]
                 )
             )

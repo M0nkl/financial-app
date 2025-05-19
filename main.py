@@ -1,12 +1,11 @@
 import flet as ft
 import sqlite3 
-
 from datetime import datetime
 
 def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.title = "Финансы"
-
+    today = datetime.today().strftime("%d_%m_%Y")
     #общие кнопки
     homepage = ft.IconButton(ft.Icons.BACKSPACE, on_click=lambda _: page.go("/"))
 
@@ -25,6 +24,7 @@ def main(page: ft.Page):
     #Ввод транзакций
     tranval = ft.TextField(label="Сумма")
     trancard = ft.Text("Т-банк")
+    trancat = ft.Text("Прочее")
 
     def get_info():
         pass
@@ -61,7 +61,9 @@ def main(page: ft.Page):
         trancard.value = e.control.value
         page.update()
 
-    card_list = ft.Dropdown(editable = True, options = [
+    card_list = ft.Dropdown(
+        editable = True, 
+        options = [
             ft.DropdownOption(key="Наличка"),
             ft.DropdownOption(key="Т-банк"),
             ft.DropdownOption(key="Каспи"),
@@ -69,10 +71,10 @@ def main(page: ft.Page):
             ft.DropdownOption(key="BuyBit"),
             ft.DropdownOption(key="OKX"),
             ft.DropdownOption(key="Binance"),
-        ], 
-        label = "wallet", 
+        ], label = "wallet", 
         value = "Т-банк",
-        on_change=dropdown_card)
+        on_change=dropdown_card,
+        )
     
     def option_currency():
         return [
@@ -87,6 +89,23 @@ def main(page: ft.Page):
             ),
         ]
     
+    def option_category(e):
+        trancat.value = e.control.value
+        page.update()
+
+    category_list = ft.Dropdown(
+        editable=True, 
+        options = [
+        ft.DropdownOption(key="Продукты"),
+        ft.DropdownOption(key="Интернет покупки"),
+        ft.DropdownOption(key="Транспорт"),
+        ft.DropdownOption(key="Перевод"),
+        ft.DropdownOption(key="Прочее"),
+    ], label = "category",
+    value = "Прочее",
+    on_change = option_category,
+    )
+
     def dropdown_currency(e):
         pass
 
@@ -96,6 +115,7 @@ def main(page: ft.Page):
             ft.View(
                 "/",
                 [
+                    ft.Text(today),
                     ft.IconButton(ft.Icons.LIGHT_MODE, on_click=change_theme),
                     ft.IconButton(ft.Icons.MONEY, on_click=lambda _: page.go("/currency")),
                     ft.IconButton(ft.Icons.PERSON, on_click=lambda _: page.go("/accounts")),
@@ -145,8 +165,9 @@ def main(page: ft.Page):
                         homepage,
                         card_list,
                         trancard,
+                        category_list,
+                        trancat,
                         tranval,
-
                     ]
                 )
             )

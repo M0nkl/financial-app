@@ -60,6 +60,9 @@ CREATE TABLE IF NOT EXISTS currency (
 
 # c.execute("DELETE FROM transactions WHERE amount > 500")
 
+# c.execute("ALTER TABLE transactions ADD category TEXT")
+
+c.execute("INSERT INTO categories (name) VALUES('Прочее')")
 
 db.commit()
 

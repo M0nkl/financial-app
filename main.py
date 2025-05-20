@@ -14,6 +14,7 @@ def main(page: ft.Page):
     cvuk = ft.TextField(label="Введите usd-kzt")
     cvur = ft.TextField(label="Введите usd-rub")
     cvrk = ft.TextField(label="Введите rub-kzt")
+    curtext = ft.Text("RUB")
 
     #Ввод кошельков
     actype = ft.TextField(label="Введите тип")
@@ -27,13 +28,16 @@ def main(page: ft.Page):
     trancat = ft.Text("Прочее")
 
     #Обработка транзакций
+    card_rub = ft.Text("Text")
 
-    def inform():
+    def card_info(e):
         db = sqlite3.connect("UserData.db", check_same_thread=False)
         c = db.cursor()
-        c.execute("SELECT * FROM transactions")
-        c.fetchall()
+        c.execute("SELECT SUM(balance) FROM accounts WHERE currency = ?", (curinfo.value,))
+        row = c.fetchone()
+        card_rub.value = row[0]
         db.close()
+        page.update()
 
     def change_theme(e):
         if page.theme_mode == ft.ThemeMode.DARK:
@@ -45,7 +49,7 @@ def main(page: ft.Page):
     def currency_in(e):
         db = sqlite3.connect("UserData.db", check_same_thread=False)
         c = db.cursor()
-        c.execute("INSERT INTO currency (date, usd_kzt, usd_rub, rub_kzt) VALUES (?, ?, ?, ?)", (cvd.value, cvuk.value, cvur.value, cvrk.value))
+        c.execute("INSERT INTO currency (date, usd_kzt, usd_rub, rub_kzt) VALUES (?, ?, ?, ?)", (today, cvuk.value, cvur.value, cvrk.value))
         db.commit()
         db.close()
 
@@ -55,6 +59,22 @@ def main(page: ft.Page):
         c.execute("INSERT INTO accounts (type, name, currency, balance) VALUES (?, ?, ?, ?)", (actype.value, acname.value, accurrency.value, acbalance.value))
         db.commit()
         db.close()
+
+    def currency_change(e):
+        curtext.value = e.control.value
+        page.update()
+
+    curinfo = ft.Dropdown(
+        editable=True,
+        label="currency",
+        value="RUB",
+        on_change = currency_change,
+        options = [
+            ft.DropdownOption(key="RUB"),
+            ft.DropdownOption(key="USD"),
+            ft.DropdownOption(key="KZT"),
+        ],
+    )
 
     def dropdown_card(e):
         trancard.value = e.control.value
@@ -74,19 +94,6 @@ def main(page: ft.Page):
         value = "Т-банк",
         on_change = dropdown_card,
         )
-    
-    def option_currency():
-        return [
-            ft.DropdownOption(
-                key="RUB",
-            ),
-            ft.DropdownOption(
-                key="USD",
-            ),
-            ft.DropdownOption(
-                key="KZT",
-            ),
-        ]
     
     def option_category(e):
         trancat.value = e.control.value
@@ -124,12 +131,9 @@ def main(page: ft.Page):
                     ft.IconButton(ft.Icons.MONEY, on_click=lambda _: page.go("/currency")),
                     ft.IconButton(ft.Icons.PERSON, on_click=lambda _: page.go("/accounts")),
                     ft.IconButton(ft.Icons.MONEY_ROUNDED, on_click=lambda _: page.go("/transaction")),
-                    ft.Dropdown(
-                        editable=True,
-                        label="currency",
-                        value="RUB",
-                        options=option_currency(),
-                    ),
+                    curinfo,
+                    ft.TextButton(text="Шма", on_click=card_info),
+                    card_rub,
                 ],
             ),
         )
@@ -139,7 +143,6 @@ def main(page: ft.Page):
                     "/currency",
                     [
                         homepage,
-                        cvd,
                         cvuk,
                         cvur,
                         cvrk,

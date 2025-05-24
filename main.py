@@ -28,10 +28,6 @@ def main(page: ft.Page):
     trancard = ft.Text("Т-банк")
     trancat = ft.Text("Прочее")
 
-    #Обработка транзакций
-    card_rub = ft.Text("Text")
-    card_kzt = ft.Text("Text")
-
     def rub_rates():
         url = "https://www.cbr-xml-daily.ru/daily_json.js"
         resp = requests.get(url)
@@ -45,21 +41,17 @@ def main(page: ft.Page):
         rates["RUB"] = 1.0
         return rates
     
-    def get_kzt(e):
-        rates = rub_rates()
-        card_kzt.value = format(rates["USD"] / rates["KZT"], ".2f")
-        page.update()
-    
-    def get_rub(e):
-        rates = rub_rates()
-        card_rub.value = format(rates["USD"], ".2f")
-        page.update()
+    rates = rub_rates()
 
-    def card_info(e):
+    usd_kzt = ft.Text("USD-KZT - " + format(rates["USD"] / rates["KZT"], ".2f"))
+    usd_rub = ft.Text("USD-RUB - " + format(rates["USD"], ".2f"))
+    rub_kzt = ft.Text("RUB-KZT - " + format(1/rates["KZT"], '.2f'))
+
+    def card_rub_info(e): # Скорее всего юзлес
         db = sqlite3.connect("UserData.db", check_same_thread=False)
         c = db.cursor()
         c.execute("SELECT (balance, currency) FROM accounts")
-        row = c.fetchone()
+        row = c.fetchall()
         card_rub.value = row
         db.close()
         page.update()
@@ -86,7 +78,14 @@ def main(page: ft.Page):
         db.close()
 
     def currency_change(e):
-        curtext.value = e.control.value
+        cur = e.control.value
+        rr = rub_rates()
+        if cur == "USD":
+            total_rub.value = format(total_balance_in_rub() / rr["USD"], '.2f') 
+        if cur == "KZT":
+            total_rub.value = format(total_balance_in_rub() / rr["KZT"], '.2f')
+        if cur == "RUB":
+            total_rub.value = format(total_balance_in_rub(), '.2f')
         page.update()
 
     curinfo = ft.Dropdown(
@@ -145,6 +144,24 @@ def main(page: ft.Page):
         db.commit()
         db.close()
 
+    def total_balance_in_rub():
+        rates = rub_rates()
+        db = sqlite3.connect("UserData.db", check_same_thread=False)
+        c = db.cursor()
+        c.execute("SELECT balance, currency FROM accounts")
+        accounts = c.fetchall()  # [(28000.0,"RUB"), (6000.0,"RUB"), (270000.0,"KZT"), ...]
+        db.close()
+        total = 0.0
+        for balance, cur_code in accounts:
+            rate = rates.get(cur_code)
+            if rate is None:
+                continue
+            total += balance * rate
+
+        return total
+    
+    total_rub = ft.Text(format(total_balance_in_rub(), '.2f'))
+    
     def route_change(route):
         page.views.clear()
         page.views.append(
@@ -156,10 +173,12 @@ def main(page: ft.Page):
                     ft.IconButton(ft.Icons.PERSON, on_click=lambda _: page.go("/accounts")),
                     ft.IconButton(ft.Icons.MONEY_ROUNDED, on_click=lambda _: page.go("/transaction")),
                     curinfo,
-                    ft.TextButton(text="Шма", on_click=get_rub),
-                    ft.TextButton(text="Шма2", on_click=get_kzt),
-                    card_rub,
-                    card_kzt,
+                    ft.TextButton(text="Шма"),
+                    ft.TextButton(text="Шма2"),
+                    usd_kzt,
+                    usd_rub,
+                    rub_kzt,
+                    total_rub,
                 ],
             ),
         )

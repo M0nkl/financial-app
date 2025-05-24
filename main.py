@@ -1,6 +1,7 @@
 import flet as ft
 import sqlite3 
 from datetime import datetime
+import requests
 
 def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
@@ -29,13 +30,37 @@ def main(page: ft.Page):
 
     #Обработка транзакций
     card_rub = ft.Text("Text")
+    card_kzt = ft.Text("Text")
+
+    def rub_rates():
+        url = "https://www.cbr-xml-daily.ru/daily_json.js"
+        resp = requests.get(url)
+        resp.raise_for_status()
+        data = resp.json()
+        # USD: {"Nominal":1, "Value":82.3456}
+        rates = {
+            code: val["Value"] / val["Nominal"]
+            for code, val in data["Valute"].items()
+        }
+        rates["RUB"] = 1.0
+        return rates
+    
+    def get_kzt(e):
+        rates = rub_rates()
+        card_kzt.value = format(rates["USD"] / rates["KZT"], ".2f")
+        page.update()
+    
+    def get_rub(e):
+        rates = rub_rates()
+        card_rub.value = format(rates["USD"], ".2f")
+        page.update()
 
     def card_info(e):
         db = sqlite3.connect("UserData.db", check_same_thread=False)
         c = db.cursor()
-        c.execute("SELECT SUM(balance) FROM accounts WHERE currency = ?", (curinfo.value,))
+        c.execute("SELECT (balance, currency) FROM accounts")
         row = c.fetchone()
-        card_rub.value = row[0]
+        card_rub.value = row
         db.close()
         page.update()
 
@@ -46,7 +71,7 @@ def main(page: ft.Page):
             page.theme_mode = ft.ThemeMode.DARK
         page.update()
 
-    def currency_in(e):
+    def currency_in(e): #Упразнено
         db = sqlite3.connect("UserData.db", check_same_thread=False)
         c = db.cursor()
         c.execute("INSERT INTO currency (date, usd_kzt, usd_rub, rub_kzt) VALUES (?, ?, ?, ?)", (today, cvuk.value, cvur.value, cvrk.value))
@@ -128,28 +153,16 @@ def main(page: ft.Page):
                 [
                     ft.Text(today),
                     ft.IconButton(ft.Icons.LIGHT_MODE, on_click=change_theme),
-                    ft.IconButton(ft.Icons.MONEY, on_click=lambda _: page.go("/currency")),
                     ft.IconButton(ft.Icons.PERSON, on_click=lambda _: page.go("/accounts")),
                     ft.IconButton(ft.Icons.MONEY_ROUNDED, on_click=lambda _: page.go("/transaction")),
                     curinfo,
-                    ft.TextButton(text="Шма", on_click=card_info),
+                    ft.TextButton(text="Шма", on_click=get_rub),
+                    ft.TextButton(text="Шма2", on_click=get_kzt),
                     card_rub,
+                    card_kzt,
                 ],
             ),
         )
-        if page.route == "/currency":
-            page.views.append(
-                ft.View(
-                    "/currency",
-                    [
-                        homepage,
-                        cvuk,
-                        cvur,
-                        cvrk,
-                        ft.ElevatedButton(text="Жмак", on_click=currency_in),
-                    ],
-                )
-            )
         if page.route == "/accounts":
             page.views.append(
                 ft.View(

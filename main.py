@@ -2,6 +2,13 @@ import flet as ft
 import sqlite3 
 from datetime import datetime
 import requests
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
+
+CBR_JSON = "https://www.cbr-xml-daily.ru/daily_json.js"
 
 def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
@@ -47,21 +54,40 @@ def main(page: ft.Page):
     usd_rub = ft.Text("USD-RUB - " + format(rates["USD"], ".2f"))
     rub_kzt = ft.Text("RUB-KZT - " + format(1/rates["KZT"], '.2f'))
 
-    def card_rub_info(e): # Скорее всего юзлес
-        db = sqlite3.connect("UserData.db", check_same_thread=False)
-        c = db.cursor()
-        c.execute("SELECT (balance, currency) FROM accounts")
-        row = c.fetchall()
-        card_rub.value = row
-        db.close()
+    chart = ft.Image()
+
+    def update_chart(target_cur: str):
+        dist   = compute_distribution(target_cur)
+        is_dark = page.theme_mode == ft.ThemeMode.DARK
+        img_b64 = make_pie_image(dist, target_cur, dark=is_dark)
+        chart.src_base64 = img_b64
+        rr = rub_rates()
+        if target_cur == "USD":
+            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub() / rr["USD"], '.2f'))
+        if target_cur == "KZT":
+            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub() / rr["KZT"], '.2f'))
+        if target_cur == "RUB":
+            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub(), '.2f'))
         page.update()
 
+
+    def fetch_wallets():
+        db = sqlite3.connect("UserData.db", check_same_thread=False)
+        c  = db.cursor()
+        c.execute("SELECT name, balance, currency FROM accounts")
+        rows = c.fetchall()
+        db.close()
+        return rows
+
     def change_theme(e):
-        if page.theme_mode == ft.ThemeMode.DARK:
-            page.theme_mode = ft.ThemeMode.LIGHT
-        else:
-            page.theme_mode = ft.ThemeMode.DARK
-        page.update()
+        # переключаем тему
+        page.theme_mode = (
+            ft.ThemeMode.LIGHT
+            if page.theme_mode == ft.ThemeMode.DARK
+            else ft.ThemeMode.DARK
+        )
+        # перезапускаем отрисовку текущего экрана
+        route_change(page)
 
     def currency_in(e): #Упразнено
         db = sqlite3.connect("UserData.db", check_same_thread=False)
@@ -81,18 +107,18 @@ def main(page: ft.Page):
         cur = e.control.value
         rr = rub_rates()
         if cur == "USD":
-            total_rub.value = format(total_balance_in_rub() / rr["USD"], '.2f') 
+            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub() / rr["USD"], '.2f'))
         if cur == "KZT":
-            total_rub.value = format(total_balance_in_rub() / rr["KZT"], '.2f')
+            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub() / rr["KZT"], '.2f'))
         if cur == "RUB":
-            total_rub.value = format(total_balance_in_rub(), '.2f')
+            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub(), '.2f'))
         page.update()
 
     curinfo = ft.Dropdown(
         editable=True,
         label="currency",
         value="RUB",
-        on_change = currency_change,
+        on_change=lambda e: update_chart(e.control.value),
         options = [
             ft.DropdownOption(key="RUB"),
             ft.DropdownOption(key="USD"),
@@ -160,7 +186,83 @@ def main(page: ft.Page):
 
         return total
     
-    total_rub = ft.Text(format(total_balance_in_rub(), '.2f'))
+    def fetch_rates():
+        resp = requests.get(CBR_JSON)
+        resp.raise_for_status()
+        data = resp.json()["Valute"]
+        rates = {"RUB": 1.0}
+        for code, info in data.items():
+            nominal   = info["Nominal"]
+            value_rub = info["Value"]
+            rates[code] = value_rub / nominal
+        return rates
+    
+    def compute_distribution(target_currency: str) -> dict:
+        rates   = fetch_rates()
+        wallets = fetch_wallets()
+        dist = {}
+        for name, bal, cur in wallets:
+            # если в API нет курса — пропускаем
+            if cur not in rates or target_currency not in rates:
+                continue
+            # баланс → в рубли → в целевую валюту
+            rub       = bal * rates[cur]
+            converted = rub / rates[target_currency]
+            dist[name] = converted
+        return dist
+    
+    def make_pie_image(dist: dict, target_currency: str, dark: bool) -> str:
+        text_color = "white" if dark else "black"
+
+        # 1) Сортируем пары (label, size) по size убыванию
+        items = sorted(dist.items(), key=lambda kv: kv[1], reverse=True)
+        labels, sizes = zip(*items)
+
+        total = sum(sizes)
+        percents = [100 * s / total for s in sizes]
+
+        # 2) Формируем подписи легенды в том же порядке
+        legend_labels = [
+            f"{label}: {value:,.2f} {target_currency} ({percent:.1f}%)"
+            for label, value, percent in zip(labels, sizes, percents)
+        ]
+
+        # 3) Рисуем прозрачное полотно
+        fig, ax = plt.subplots(figsize=(6,6), facecolor="none")
+        ax.set_facecolor("none")
+
+        # 4) Круг без встроенных меток
+        wedges, _ = ax.pie(
+            sizes,
+            startangle=90,
+            radius=0.7,
+            center=(0.3, 0.5),
+            labels=None
+        )
+        ax.axis("equal")
+
+        # 5) Легенда справа, с уже отсортированными записями
+        legend = ax.legend(
+            wedges,
+            legend_labels,
+            title="Кошельки",
+            loc="center left",
+            bbox_to_anchor=(1, 0.5),
+            frameon=False,
+            prop={"size": 10}
+        )
+        for txt in legend.get_texts():
+            txt.set_color(text_color)
+        legend.get_title().set_color(text_color)
+
+        # 6) Сохраняем картинку как прозрачный PNG → Base64
+        buf = BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight", transparent=True)
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode()
+            
+    total_rub = ft.Text("Ваш общий баланс в выбранной валюте: " + format(total_balance_in_rub(), '.2f'))
     
     def route_change(route):
         page.views.clear()
@@ -179,9 +281,11 @@ def main(page: ft.Page):
                     usd_rub,
                     rub_kzt,
                     total_rub,
+                    chart,
                 ],
             ),
         )
+        update_chart(curinfo.value)
         if page.route == "/accounts":
             page.views.append(
                 ft.View(

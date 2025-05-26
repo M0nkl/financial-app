@@ -70,6 +70,90 @@ def main(page: ft.Page):
             total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub(), '.2f'))
         page.update()
 
+    def fetch_transactions():
+        db = sqlite3.connect("UserData.db", check_same_thread=False)
+        db.row_factory = sqlite3.Row
+        c = db.cursor()
+        c.execute("""
+            SELECT id, date, amount, category, account
+            FROM transactions
+            ORDER BY date DESC
+        """)
+        rows = c.fetchall()
+        db.close()
+        # возвращаем список словарей
+        return [dict(r) for r in rows]
+
+    def delete_transaction(txn_id):
+        db = sqlite3.connect("UserData.db", check_same_thread=False)
+        c = db.cursor()
+        c.execute("DELETE FROM transactions WHERE id = ?", (txn_id,))
+        db.commit()
+        db.close()
+    
+    def transaction_page(page: ft.Page):
+        # данные
+        txns = fetch_transactions()
+        # колонки
+        cols = [
+            ft.DataColumn(ft.Text("ID")),
+            ft.DataColumn(ft.Text("Дата")),
+            ft.DataColumn(ft.Text("Сумма")),
+            ft.DataColumn(ft.Text("Категория")),
+            ft.DataColumn(ft.Text("Кошелек")),
+        ]
+        # строки
+        rows = []
+        for t in txns:
+            rows.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(str(t["id"]))),
+                        ft.DataCell(ft.Text(t["date"])),
+                        ft.DataCell(ft.Text(f"{t['amount']:.2f}")),
+                        ft.DataCell(ft.Text(t["category"])),
+                        ft.DataCell(ft.Text(t["account"])),
+                    ]
+                )
+            )
+        table = ft.DataTable(columns=cols, rows=rows, heading_row_color=ft.colors.BLUE_GREY_200)
+
+        def transaction_in(e):
+            db = sqlite3.connect("UserData.db", check_same_thread=False)
+            c = db.cursor()
+            c.execute("INSERT INTO transactions (date, account, category, amount) VALUES (?, ?, ?, ?)", (today, trancard.value, trancat.value, tranval.value))
+            c.execute("UPDATE accounts SET balance = balance + ? WHERE name = ?", (tranval.value, trancard.value))
+            db.commit()
+            db.close()
+            refresh_table()
+            page.update()
+
+        def refresh_table():
+            txns = fetch_transactions()
+            table.rows = [
+                ft.DataRow(cells=[
+                    ft.DataCell(ft.Text(str(t["id"]))),
+                    ft.DataCell(ft.Text(t["date"])),
+                    ft.DataCell(ft.Text(f"{t['amount']:.2f}")),
+                    ft.DataCell(ft.Text(t["category"])),
+                    ft.DataCell(ft.Text(t["account"])),
+                ])
+                for t in txns
+        ]
+        page.update()
+        return ft.View(
+            "/transaction",
+            controls=[
+                homepage,
+                card_list,
+                category_list,
+                tranval,
+                ft.ElevatedButton(text="Подтвердить", on_click=transaction_in),
+                ft.Text("История транзакций", size=24),
+                table,
+            ]
+        )
+    
 
     def fetch_wallets():
         db = sqlite3.connect("UserData.db", check_same_thread=False)
@@ -80,21 +164,12 @@ def main(page: ft.Page):
         return rows
 
     def change_theme(e):
-        # переключаем тему
         page.theme_mode = (
             ft.ThemeMode.LIGHT
             if page.theme_mode == ft.ThemeMode.DARK
             else ft.ThemeMode.DARK
         )
-        # перезапускаем отрисовку текущего экрана
         route_change(page)
-
-    def currency_in(e): #Упразнено
-        db = sqlite3.connect("UserData.db", check_same_thread=False)
-        c = db.cursor()
-        c.execute("INSERT INTO currency (date, usd_kzt, usd_rub, rub_kzt) VALUES (?, ?, ?, ?)", (today, cvuk.value, cvur.value, cvrk.value))
-        db.commit()
-        db.close()
 
     def accounts_in(e):
         db = sqlite3.connect("UserData.db", check_same_thread=False)
@@ -102,17 +177,6 @@ def main(page: ft.Page):
         c.execute("INSERT INTO accounts (type, name, currency, balance) VALUES (?, ?, ?, ?)", (actype.value, acname.value, accurrency.value, acbalance.value))
         db.commit()
         db.close()
-
-    def currency_change(e):
-        cur = e.control.value
-        rr = rub_rates()
-        if cur == "USD":
-            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub() / rr["USD"], '.2f'))
-        if cur == "KZT":
-            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub() / rr["KZT"], '.2f'))
-        if cur == "RUB":
-            total_rub.value = ("Ваш общий баланс в выбранной валюте: " +  format(total_balance_in_rub(), '.2f'))
-        page.update()
 
     curinfo = ft.Dropdown(
         editable=True,
@@ -161,14 +225,6 @@ def main(page: ft.Page):
     value = "Прочее",
     on_change = option_category,
     )
-
-    def transaction_in(e):
-        db = sqlite3.connect("UserData.db", check_same_thread=False)
-        c = db.cursor()
-        c.execute("INSERT INTO transactions (date, account, category, amount) VALUES (?, ?, ?, ?)", (today, trancard.value, trancat.value, tranval.value))
-        c.execute("UPDATE accounts SET balance = balance + ? WHERE name = ?", (tranval.value, trancard.value))
-        db.commit()
-        db.close()
 
     def total_balance_in_rub():
         rates = rub_rates()
@@ -301,20 +357,7 @@ def main(page: ft.Page):
                 )
             )
         if page.route == "/transaction":
-            page.views.append(
-                ft.View(
-                    "/transaction",
-                    [
-                        homepage,
-                        card_list,
-                        category_list,
-                        tranval,
-                        ft.ElevatedButton(text="Шпак", on_click=transaction_in),
-                        trancard,
-                        trancat,
-                    ]
-                )
-            )
+            page.views.append(transaction_page(page))
         page.update()
 
     def view_pop(view):

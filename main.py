@@ -83,13 +83,6 @@ def main(page: ft.Page):
         db.close()
         # возвращаем список словарей
         return [dict(r) for r in rows]
-
-    def delete_transaction(txn_id):
-        db = sqlite3.connect("UserData.db", check_same_thread=False)
-        c = db.cursor()
-        c.execute("DELETE FROM transactions WHERE id = ?", (txn_id,))
-        db.commit()
-        db.close()
     
     def transaction_page(page: ft.Page):
         # данные
@@ -161,7 +154,17 @@ def main(page: ft.Page):
         c.execute("SELECT name, balance, currency FROM accounts")
         rows = c.fetchall()
         db.close()
-        return rows
+        return rows  
+
+    def wallets_out():
+        row = fetch_wallets()
+        text = []
+        for name, balance, currency in row:
+            text.append(ft.Text(f"{name} - {balance} {currency}"))
+        return text
+    
+    wallets_list = ft.Column(controls=wallets_out())
+
 
     def change_theme(e):
         page.theme_mode = (
@@ -331,8 +334,6 @@ def main(page: ft.Page):
                     ft.IconButton(ft.Icons.PERSON, on_click=lambda _: page.go("/accounts")),
                     ft.IconButton(ft.Icons.MONEY_ROUNDED, on_click=lambda _: page.go("/transaction")),
                     curinfo,
-                    ft.TextButton(text="Шма"),
-                    ft.TextButton(text="Шма2"),
                     usd_kzt,
                     usd_rub,
                     rub_kzt,
@@ -353,6 +354,7 @@ def main(page: ft.Page):
                         accurrency,
                         acbalance,
                         ft.ElevatedButton(text="Жмак", on_click=accounts_in),
+                        wallets_list,
                     ]
                 )
             )
@@ -368,5 +370,6 @@ def main(page: ft.Page):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
     page.go(page.route)
+
 
 ft.app(main)

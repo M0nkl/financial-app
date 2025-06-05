@@ -35,6 +35,50 @@ def main(page: ft.Page):
     trancard = ft.Text("Т-банк")
     trancat = ft.Text("Прочее")
 
+    def dropdown_card(e):
+        trancard.value = e.control.value
+        page.update()
+
+    card_list = ft.Dropdown(
+        editable = True, 
+        options = [
+            ft.DropdownOption(key="Наличка"),
+            ft.DropdownOption(key="Т-банк"),
+            ft.DropdownOption(key="Каспи"),
+            ft.DropdownOption(key="СберБанк"),
+            ft.DropdownOption(key="BuyBit"),
+            ft.DropdownOption(key="OKX"),
+            ft.DropdownOption(key="Binance"),
+        ], label = "wallet", 
+        value = "Т-банк",
+        on_change = dropdown_card,
+        )
+    
+    def option_category(e):
+        trancat.value = e.control.value
+        page.update()
+
+    category_list = ft.Dropdown(
+        editable=True, 
+        options = [
+        ft.DropdownOption(key="Продукты"),
+        ft.DropdownOption(key="Интернет покупки"),
+        ft.DropdownOption(key="Транспорт"),
+        ft.DropdownOption(key="Перевод"),
+        ft.DropdownOption(key="Прочее"),
+    ], label = "category",
+    value = "Прочее",
+    on_change = option_category,
+    )
+    
+    #Депозиты
+    name = ft.TextField(label="Название вклада")
+    target_amount = ft.TextField(label="Цель (рубли)")
+    monthly_payment = ft.TextField(label="Ежемесячный вклад")
+    interest_rate = ft.TextField(label="Годовая ставка (%)")
+    capitalization = ft.Switch(label="Капитализация", value=True)
+    deposit_list = ft.Column()
+
     def rub_rates():
         url = "https://www.cbr-xml-daily.ru/daily_json.js"
         resp = requests.get(url)
@@ -84,69 +128,7 @@ def main(page: ft.Page):
         # возвращаем список словарей
         return [dict(r) for r in rows]
     
-    def transaction_page(page: ft.Page):
-        # данные
-        txns = fetch_transactions()
-        # колонки
-        cols = [
-            ft.DataColumn(ft.Text("ID")),
-            ft.DataColumn(ft.Text("Дата")),
-            ft.DataColumn(ft.Text("Сумма")),
-            ft.DataColumn(ft.Text("Категория")),
-            ft.DataColumn(ft.Text("Кошелек")),
-        ]
-        # строки
-        rows = []
-        for t in txns:
-            rows.append(
-                ft.DataRow(
-                    cells=[
-                        ft.DataCell(ft.Text(str(t["id"]))),
-                        ft.DataCell(ft.Text(t["date"])),
-                        ft.DataCell(ft.Text(f"{t['amount']:.2f}")),
-                        ft.DataCell(ft.Text(t["category"])),
-                        ft.DataCell(ft.Text(t["account"])),
-                    ]
-                )
-            )
-        table = ft.DataTable(columns=cols, rows=rows, heading_row_color=ft.colors.BLUE_GREY_200)
-
-        def transaction_in(e):
-            db = sqlite3.connect("UserData.db", check_same_thread=False)
-            c = db.cursor()
-            c.execute("INSERT INTO transactions (date, account, category, amount) VALUES (?, ?, ?, ?)", (today, trancard.value, trancat.value, tranval.value))
-            c.execute("UPDATE accounts SET balance = balance + ? WHERE name = ?", (tranval.value, trancard.value))
-            db.commit()
-            db.close()
-            refresh_table()
-            page.update()
-
-        def refresh_table():
-            txns = fetch_transactions()
-            table.rows = [
-                ft.DataRow(cells=[
-                    ft.DataCell(ft.Text(str(t["id"]))),
-                    ft.DataCell(ft.Text(t["date"])),
-                    ft.DataCell(ft.Text(f"{t['amount']:.2f}")),
-                    ft.DataCell(ft.Text(t["category"])),
-                    ft.DataCell(ft.Text(t["account"])),
-                ])
-                for t in txns
-        ]
-        page.update()
-        return ft.View(
-            "/transaction",
-            controls=[
-                homepage,
-                card_list,
-                category_list,
-                tranval,
-                ft.ElevatedButton(text="Подтвердить", on_click=transaction_in),
-                ft.Text("История транзакций", size=24),
-                table,
-            ]
-        )
-    
+   
 
     def fetch_wallets():
         db = sqlite3.connect("UserData.db", check_same_thread=False)
@@ -160,7 +142,16 @@ def main(page: ft.Page):
         row = fetch_wallets()
         text = []
         for name, balance, currency in row:
-            text.append(ft.Text(f"{name} - {balance} {currency}"))
+            text.append(
+                ft.Card(
+                    content=ft.ListTile(
+                        leading=ft.Icon(ft.icons.ACCOUNT_BALANCE_WALLET),
+                        title=ft.Text(name, weight="bold"),
+                        subtitle=ft.Text(f"{balance} {currency}")
+                    )
+                )
+            )
+
         return text
     
     wallets_list = ft.Column(controls=wallets_out())
@@ -193,41 +184,7 @@ def main(page: ft.Page):
         ],
     )
 
-    def dropdown_card(e):
-        trancard.value = e.control.value
-        page.update()
 
-    card_list = ft.Dropdown(
-        editable = True, 
-        options = [
-            ft.DropdownOption(key="Наличка"),
-            ft.DropdownOption(key="Т-банк"),
-            ft.DropdownOption(key="Каспи"),
-            ft.DropdownOption(key="СберБанк"),
-            ft.DropdownOption(key="BuyBit"),
-            ft.DropdownOption(key="OKX"),
-            ft.DropdownOption(key="Binance"),
-        ], label = "wallet", 
-        value = "Т-банк",
-        on_change = dropdown_card,
-        )
-    
-    def option_category(e):
-        trancat.value = e.control.value
-        page.update()
-
-    category_list = ft.Dropdown(
-        editable=True, 
-        options = [
-        ft.DropdownOption(key="Продукты"),
-        ft.DropdownOption(key="Интернет покупки"),
-        ft.DropdownOption(key="Транспорт"),
-        ft.DropdownOption(key="Перевод"),
-        ft.DropdownOption(key="Прочее"),
-    ], label = "category",
-    value = "Прочее",
-    on_change = option_category,
-    )
 
     def total_balance_in_rub():
         rates = rub_rates()
@@ -322,6 +279,126 @@ def main(page: ft.Page):
         return base64.b64encode(buf.read()).decode()
             
     total_rub = ft.Text("Ваш общий баланс в выбранной валюте: " + format(total_balance_in_rub(), '.2f'))
+
+    def calculate_months(target, monthly, rate, cap):
+        m_rate = (rate / 100) / 12
+        total = 0
+        months = 0
+        while total < target:
+            total += monthly
+            if cap:
+                total += total * m_rate
+            months += 1
+            if months > 600:
+                break
+        return months, round(total, 2)
+    
+    def transaction_page(page: ft.Page):
+        txns = fetch_transactions()
+
+        cols = [
+            ft.DataColumn(ft.Text("ID")),
+            ft.DataColumn(ft.Text("Дата")),
+            ft.DataColumn(ft.Text("Сумма")),
+            ft.DataColumn(ft.Text("Категория")),
+            ft.DataColumn(ft.Text("Кошелек")),
+        ]
+
+        rows = [
+            ft.DataRow(
+                cells=[
+                    ft.DataCell(ft.Text(str(t["id"]))),
+                    ft.DataCell(ft.Text(t["date"])),
+                    ft.DataCell(ft.Text(f"{t['amount']:.2f}")),
+                    ft.DataCell(ft.Text(t["category"])),
+                    ft.DataCell(ft.Text(t["account"])),
+                ]
+            )
+            for t in txns
+        ]
+
+        table = ft.DataTable(columns=cols, rows=rows)
+
+        def transaction_in(e):
+            db = sqlite3.connect("UserData.db", check_same_thread=False)
+            c = db.cursor()
+            c.execute("INSERT INTO transactions (date, account, category, amount) VALUES (?, ?, ?, ?)",
+                    (today, trancard.value, trancat.value, tranval.value))
+            c.execute("UPDATE accounts SET balance = balance + ? WHERE name = ?", (tranval.value, trancard.value))
+            db.commit()
+            db.close()
+            page.go("/transaction")  # просто перезагружаем
+
+        return ft.View(
+            "/transaction",
+            controls=[
+                homepage,
+                card_list,
+                category_list,
+                tranval,
+                ft.ElevatedButton(text="Подтвердить", on_click=transaction_in),
+                ft.Text("История транзакций", size=24),
+                table
+            ]
+        )
+
+    
+    def add_deposit(e):
+        try:
+            t = float(target_amount.value)
+            m = float(monthly_payment.value)
+            r = float(interest_rate.value)
+            cap = int(capitalization.value)
+            months, final = calculate_months(t, m, r, cap)
+
+            db = sqlite3.connect("UserData.db", check_same_thread=False)
+            c = db.cursor()
+            c.execute("""
+                INSERT INTO deposits (
+                    name, target_amount, monthly_payment, interest_rate,
+                    start_date, capitalization, calculated_months, final_amount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                name.value,
+                t, m, r,
+                datetime.today().strftime("%Y-%m-%d"),
+                cap,
+                months,
+                final
+            ))
+            db.commit()
+            db.close()
+
+            name.value = target_amount.value = monthly_payment.value = interest_rate.value = ""
+            capitalization.value = True
+            load_deposits()
+            page.update()
+        except:
+            deposit_list.controls.append(ft.Text("Ошибка при вводе данных", color="red"))
+            page.update()
+
+    def load_deposits():
+        deposit_list.controls.clear()  # очищаем список перед загрузкой
+        db = sqlite3.connect("UserData.db", check_same_thread=False)
+        c = db.cursor()
+        cursor = c.execute("SELECT name, target_amount, monthly_payment, interest_rate, capitalization, calculated_months, final_amount FROM deposits")
+        for row in cursor.fetchall():
+            deposit_list.controls.append(
+                ft.Card(
+                    content=ft.ListTile(
+                        leading=ft.Icon(ft.icons.SAVINGS),
+                        title=ft.Text(row[0], weight="bold"),
+                        subtitle=ft.Text(
+                            f"Цель: {row[1]}₽ | Вклад: {row[2]}₽/мес | Ставка: {row[3]}% | "
+                            f"{'Капитализация' if row[4] else 'Без капитализации'} | "
+                            f"Срок: {row[5]} мес | Итог: {row[6]}₽"
+                        )
+                    )
+                )
+            )
+        db.close()
+
+    load_deposits()
     
     def route_change(route):
         page.views.clear()
@@ -330,14 +407,19 @@ def main(page: ft.Page):
                 "/",
                 [
                     ft.Text(today),
-                    ft.IconButton(ft.Icons.LIGHT_MODE, on_click=change_theme),
-                    ft.IconButton(ft.Icons.PERSON, on_click=lambda _: page.go("/accounts")),
-                    ft.IconButton(ft.Icons.MONEY_ROUNDED, on_click=lambda _: page.go("/transaction")),
-                    curinfo,
-                    usd_kzt,
-                    usd_rub,
-                    rub_kzt,
-                    total_rub,
+                    ft.Row([
+                    ft.ElevatedButton("Счета", on_click=lambda _: page.go("/accounts")),
+                    ft.ElevatedButton("Транзакции", on_click=lambda _: page.go("/transaction")),
+                    ft.ElevatedButton("Вклады", on_click=lambda _: page.go("/invest")),
+                    ft.IconButton(ft.Icons.LIGHT_MODE, on_click=change_theme)
+                    ]),
+                    ft.Tabs(
+                        selected_index=0,
+                        tabs=[
+                            ft.Tab(text="Курсы валют", content=ft.Column([usd_kzt, usd_rub, rub_kzt])),
+                            ft.Tab(text="Баланс", content=ft.Column([curinfo, chart, total_rub]))
+                        ]
+                    ),
                     chart,
                 ],
             ),
@@ -353,14 +435,33 @@ def main(page: ft.Page):
                         acname,
                         accurrency,
                         acbalance,
-                        ft.ElevatedButton(text="Жмак", on_click=accounts_in),
+                        ft.ElevatedButton(text="Добавить счет", on_click=accounts_in),
                         wallets_list,
                     ]
                 )
             )
         if page.route == "/transaction":
             page.views.append(transaction_page(page))
-        page.update()
+
+
+
+        if page.route == "/invest":
+            page.views.append(
+                ft.View(
+                    "/invest",
+                    [
+                        homepage,
+                        ft.Column([
+                        ft.Text("Добавить вклад", size=20, weight="bold"),
+                        name, target_amount, monthly_payment, interest_rate, capitalization,
+                        ft.ElevatedButton(text="Добавить вклад", on_click=add_deposit),
+                        ft.Divider(),
+                        ft.Text("Список вкладов", size=18, weight="bold"),
+                        deposit_list,
+                    ], scroll=ft.ScrollMode.AUTO)
+                    ]
+                )
+            )
 
     def view_pop(view):
         page.views.pop()

@@ -54,6 +54,20 @@ CREATE TABLE IF NOT EXISTS currency (
     rub_kzt integer
 )""")
 
+c.execute("""
+CREATE TABLE IF NOT EXISTS deposits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    target_amount REAL,
+    monthly_payment REAL,
+    interest_rate REAL,
+    start_date TEXT,
+    capitalization INTEGER, -- 1 = да, 0 = нет
+    calculated_months INTEGER,
+    final_amount REAL
+)
+""")
+
 # c.execute("""INSERT INTO transactions (date, amount, account_id, category_id, payment_method)
 #         VALUES ("18-09-2006", 5000, 1, 1, "card")
 # """)

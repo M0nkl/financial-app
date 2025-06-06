@@ -68,15 +68,7 @@ CREATE TABLE IF NOT EXISTS deposits (
 )
 """)
 
-# c.execute("""INSERT INTO transactions (date, amount, account_id, category_id, payment_method)
-#         VALUES ("18-09-2006", 5000, 1, 1, "card")
-# """)
-
-# c.execute("DELETE FROM transactions WHERE amount > 500")
-
-# c.execute("ALTER TABLE transactions ADD category TEXT")
-
-# c.execute("INSERT INTO categories (name) VALUES('Прочее')")
+c.execute("DELETE FROM transactions WHERE id > 20")
 
 db.commit()
 

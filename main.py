@@ -84,7 +84,6 @@ def main(page: ft.Page):
         resp = requests.get(url)
         resp.raise_for_status()
         data = resp.json()
-        # USD: {"Nominal":1, "Value":82.3456}
         rates = {
             code: val["Value"] / val["Nominal"]
             for code, val in data["Valute"].items()
@@ -121,14 +120,11 @@ def main(page: ft.Page):
         c.execute("""
             SELECT id, date, amount, category, account
             FROM transactions
-            ORDER BY date DESC
+            ORDER BY id DESC
         """)
         rows = c.fetchall()
         db.close()
-        # возвращаем список словарей
         return [dict(r) for r in rows]
-    
-   
 
     def fetch_wallets():
         db = sqlite3.connect("UserData.db", check_same_thread=False)
@@ -151,11 +147,9 @@ def main(page: ft.Page):
                     )
                 )
             )
-
         return text
     
     wallets_list = ft.Column(controls=wallets_out())
-
 
     def change_theme(e):
         page.theme_mode = (
@@ -184,14 +178,12 @@ def main(page: ft.Page):
         ],
     )
 
-
-
     def total_balance_in_rub():
         rates = rub_rates()
         db = sqlite3.connect("UserData.db", check_same_thread=False)
         c = db.cursor()
         c.execute("SELECT balance, currency FROM accounts")
-        accounts = c.fetchall()  # [(28000.0,"RUB"), (6000.0,"RUB"), (270000.0,"KZT"), ...]
+        accounts = c.fetchall() 
         db.close()
         total = 0.0
         for balance, cur_code in accounts:
@@ -218,10 +210,8 @@ def main(page: ft.Page):
         wallets = fetch_wallets()
         dist = {}
         for name, bal, cur in wallets:
-            # если в API нет курса — пропускаем
             if cur not in rates or target_currency not in rates:
                 continue
-            # баланс → в рубли → в целевую валюту
             rub       = bal * rates[cur]
             converted = rub / rates[target_currency]
             dist[name] = converted
@@ -229,25 +219,18 @@ def main(page: ft.Page):
     
     def make_pie_image(dist: dict, target_currency: str, dark: bool) -> str:
         text_color = "white" if dark else "black"
-
-        # 1) Сортируем пары (label, size) по size убыванию
         items = sorted(dist.items(), key=lambda kv: kv[1], reverse=True)
         labels, sizes = zip(*items)
 
         total = sum(sizes)
         percents = [100 * s / total for s in sizes]
 
-        # 2) Формируем подписи легенды в том же порядке
         legend_labels = [
             f"{label}: {value:,.2f} {target_currency} ({percent:.1f}%)"
             for label, value, percent in zip(labels, sizes, percents)
         ]
-
-        # 3) Рисуем прозрачное полотно
         fig, ax = plt.subplots(figsize=(6,6), facecolor="none")
         ax.set_facecolor("none")
-
-        # 4) Круг без встроенных меток
         wedges, _ = ax.pie(
             sizes,
             startangle=90,
@@ -256,8 +239,6 @@ def main(page: ft.Page):
             labels=None
         )
         ax.axis("equal")
-
-        # 5) Легенда справа, с уже отсортированными записями
         legend = ax.legend(
             wedges,
             legend_labels,
@@ -270,8 +251,6 @@ def main(page: ft.Page):
         for txt in legend.get_texts():
             txt.set_color(text_color)
         legend.get_title().set_color(text_color)
-
-        # 6) Сохраняем картинку как прозрачный PNG → Base64
         buf = BytesIO()
         fig.savefig(buf, format="png", bbox_inches="tight", transparent=True)
         plt.close(fig)
@@ -327,8 +306,7 @@ def main(page: ft.Page):
             c.execute("UPDATE accounts SET balance = balance + ? WHERE name = ?", (tranval.value, trancard.value))
             db.commit()
             db.close()
-            page.go("/transaction")  # просто перезагружаем
-
+            page.go("/transaction")
         return ft.View(
             "/transaction",
             controls=[
@@ -341,8 +319,7 @@ def main(page: ft.Page):
                 table
             ]
         )
-
-    
+ 
     def add_deposit(e):
         try:
             t = float(target_amount.value)
@@ -378,7 +355,7 @@ def main(page: ft.Page):
             page.update()
 
     def load_deposits():
-        deposit_list.controls.clear()  # очищаем список перед загрузкой
+        deposit_list.controls.clear()
         db = sqlite3.connect("UserData.db", check_same_thread=False)
         c = db.cursor()
         cursor = c.execute("SELECT name, target_amount, monthly_payment, interest_rate, capitalization, calculated_months, final_amount FROM deposits")
